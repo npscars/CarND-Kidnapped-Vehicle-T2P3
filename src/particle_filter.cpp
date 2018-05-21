@@ -3,6 +3,7 @@
  *
  *  Created on: Dec 12, 2016
  *      Author: Tiffany Huang
+ *      Edited: Nirav Shah on May 21, 2018
  */
 
 #include <random>
@@ -76,8 +77,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         particles[i_particle].theta = dt(re);
         
     }
-    
-
 }
 
 void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations, double sensor_range) {
@@ -116,9 +115,16 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   http://planning.cs.uiuc.edu/node99.html
     double weight_normalizer = 0.0;
     
+    //get all landmarks in one vector only once
+    vector<LandmarkObs> predicted_landmarks;
+    for (size_t i_mapL = 0; i_mapL < map_landmarks.landmark_list.size(); i_mapL++) {
+            Map::single_landmark_s current_landmark = map_landmarks.landmark_list[i_mapL];
+            predicted_landmarks.push_back(LandmarkObs {current_landmark.id_i, current_landmark.x_f, current_landmark.y_f});
+    }
+    
     for (size_t i_particle = 0; i_particle < num_particles; i_particle++) {
         
-        vector<LandmarkObs> trans_obs; // equation from Lesson 14 section 15 for transformation matrix from vehicle to map coordinates
+        vector<LandmarkObs> trans_obs; // equation from Lesson 14 section 15 for transformation matrix from vehicle to map coordinates for observations
         for (size_t i_obs = 0; i_obs < observations.size(); i_obs++ ){
             LandmarkObs obs;
             obs.id = i_obs;
@@ -126,21 +132,11 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             obs.y = sin(particles[i_particle].theta)*observations[i_obs].x + cos(particles[i_particle].theta)*observations[i_obs].y + particles[i_particle].y;
             trans_obs.push_back(obs);
         }
-        
-        //filter map landmarks, only keep within sensor range.
-        vector<LandmarkObs> predicted_landmarks;
-        for (size_t i_mapL = 0; i_mapL < map_landmarks.landmark_list.size(); i_mapL++) {
-            Map::single_landmark_s current_landmark = map_landmarks.landmark_list[i_mapL];
-            if ((fabs((particles[i_particle].x - current_landmark.x_f)) <= sensor_range) && (fabs((particles[i_particle].y - current_landmark.y_f)) <= sensor_range)) {
-                //predicted_landmarks.push_back(current_landmark);
-                predicted_landmarks.push_back(LandmarkObs {current_landmark.id_i, current_landmark.x_f, current_landmark.y_f});
-            }
-        }
-        
-        //make the data association between landmark and observations
+
+        // find the nearest landmark to the transformed observations
         dataAssociation(predicted_landmarks, trans_obs, sensor_range);
         
-        // update weights
+        // update weights for all observations
         particles[i_particle].weight = 1.0;
         double sigma_x = std_landmark[0];
         double sigma_y = std_landmark[1];
@@ -149,7 +145,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         for (size_t i_obs = 0; i_obs < trans_obs.size(); i_obs++){
             double multi_prob = 1.0;
             for (size_t i_land = 0; i_land < predicted_landmarks.size(); i_land++){
-                if(trans_obs[i_obs].id == predicted_landmarks[i_land].id){ // equation from lesson 14, section 19
+                if(trans_obs[i_obs].id == predicted_landmarks[i_land].id){ // equation from lesson 14, section 19 used for multivariate probability
                     multi_prob = normalizer*exp(-1.0*((pow(trans_obs[i_obs].x-predicted_landmarks[i_land].x,2)/(2.0*pow(sigma_x,2)))+(pow(trans_obs[i_obs].y-predicted_landmarks[i_land].y,2)/(2.0*pow(sigma_y,2)))));
                     particles[i_particle].weight *= multi_prob;
                 }
